@@ -25,9 +25,22 @@ export function createHandler(assets){return {async fetch(request,env){
    if(input.action==='bookingChange'&&!identity&&!input.token)return json({ok:false,error:{code:'UNAUTHORIZED',message:'Потрібен ключ запису'}},401,headers);
    if((input.action==='book'||input.action==='myBooking'||(input.action==='bookingChange'&&!identity))&&!/^[a-f0-9]{64}$/.test(input.token||''))throw Error('Invalid booking key');
    const requestId=request.headers.get('Idempotency-Key');if(mutations.includes(input.action)&&!/^[a-f0-9-]{36}$/.test(requestId||''))throw Error('Invalid idempotency key');
-   const payload=serializeWire({action:input.action,params:input.params,identity:identity||null,tokenHash:input.token?await sha(input.token):null,requestId,requestHash:await sha(raw),timestamp:Date.now(),nonce:crypto.randomUUID(),rateKey:await sign(request.headers.get('CF-Connecting-IP')||'anonymous',env.GATEWAY_SECRET)});
-   const upstream=await fetch(env.GAS_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({payload,signature:await sign(payload,env.GATEWAY_SECRET)}),signal:AbortSignal.timeout(30000)});
-   const response=await upstream.json();if(typeof response.ok!=='boolean')throw Error('Invalid upstream response');
+   const cookie=/__Host-royal_admin=([a-f0-9]{64})(?:;|$)/.exec(request.headers.get('Cookie')||'');
+   const adminSessionHash=identity&&cookie?await sha(cookie[1]):null;
+   async function backend(action,params){const payload=serializeWire({action,params,identity:identity||null,adminSessionHash,tokenHash:input.token?await sha(input.token):null,requestId,requestHash:await sha(raw),timestamp:Date.now(),nonce:crypto.randomUUID(),rateKey:await sign(request.headers.get('CF-Connecting-IP')||'anonymous',env.GATEWAY_SECRET)});const upstream=await fetch(env.GAS_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({payload,signature:await sign(payload,env.GATEWAY_SECRET)}),signal:AbortSignal.timeout(30000)});const result=await upstream.json();if(typeof result.ok!=='boolean')throw Error('Invalid upstream response');return result;}
+   let response;
+   if(['adminUnlock','adminSetPassword'].includes(input.action)){
+    const password=input.params.password;if(typeof password!=='string'||password.length<14||password.length>128)return json({ok:false,error:{code:'VALIDATION',message:'Пароль має містити від 14 до 128 символів.'}},400,headers);
+    const cfg=await backend('adminAuthStatus',{});if(!cfg.ok)return json(cfg,403,headers);
+    if(cfg.data.iterations!==600000||typeof cfg.data.salt!=='string')throw Error('Invalid password configuration');
+    const key=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);
+    const passwordProof=hex(await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode(cfg.data.salt),iterations:600000,hash:'SHA-256'},key,256));
+    const session=hex(crypto.getRandomValues(new Uint8Array(32)));
+    response=await backend(input.action,{passwordProof,salt:cfg.data.salt,newSessionHash:await sha(session)});
+    if(response.ok)headers['Set-Cookie']='__Host-royal_admin='+session+'; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=3600';
+   }else response=await backend(input.action,input.params);
+   if(input.action==='adminAuthStatus'&&response.ok){delete response.data.salt;delete response.data.iterations;}
+   if(input.action==='adminLogout'&&response.ok)headers['Set-Cookie']='__Host-royal_admin=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0';
    return json(response,response.ok?200:response.error?.code==='FORBIDDEN'?403:response.error?.code==='RATE_LIMIT'?429:409,headers);
   }catch(error){return json({ok:false,error:{code:'UNAVAILABLE',message:'Не вдалося отримати підтвердження. Повторіть запит: система перевірить, чи його вже виконано.'}},502,headers);}
  }
@@ -36,6 +49,7 @@ export function createHandler(assets){return {async fetch(request,env){
  }
  const path=url.pathname==='/'?'/index.html':url.pathname==='/admin'||url.pathname==='/admin/'?'/admin.html':url.pathname;
  const item=assets[path];if(!item)return new Response('Сторінку не знайдено',{status:404,headers});
+ if(item.redirect)return Response.redirect(item.redirect,302);
  headers['Content-Type']=item.type;headers['Content-Security-Policy']="default-src 'self'; connect-src 'self' https://royal-barbershop-api.moltenheron4.chatgpt.site; img-src 'self' https: data:; style-src 'self'; script-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'";
  return new Response(item.encoding==='base64'?Uint8Array.from(atob(item.content),c=>c.charCodeAt(0)):item.content,{headers});
 }};}

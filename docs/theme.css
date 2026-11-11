@@ -5,3 +5,5 @@
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{transition:none!important;animation:none!important}}
 
 .photo-label{position:absolute;right:18px;bottom:8px;z-index:3;color:#c5baa8;font-size:8px;letter-spacing:.3px}.hero-visual>.photo-label{bottom:108px}.hero-barber-chip[hidden]{display:none}.royal-price-row{display:flex;align-items:center;gap:22px;margin:25px 0}.royal-price-row>span{color:#a49a86;font-size:12px}.royal-copy>.lead{max-width:480px}.royal-copy .royal-steps{margin:20px 0}.royal-photo>.photo-label{bottom:15px}.photo-credit{padding:0 5% 25px;color:#817d73;font-size:9px}.photo-credit a{color:#bba276}
+
+.access-dialog{max-width:460px;width:calc(100% - 32px)}.access-dialog form{display:flex;flex-direction:column;gap:16px}.access-dialog h2{margin:0;font-size:30px}.access-dialog label{display:flex;flex-direction:column;gap:9px}.access-dialog .hint{margin:0;line-height:1.6}.admin-header #admin-lock{font-size:11px;color:#baa578}

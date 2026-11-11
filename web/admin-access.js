@@ -1,0 +1,11 @@
+import {api,el} from './api.js';
+let active=null;
+export async function unlockAdmin({change=false}={}){if(active)return active;active=openGate(change).finally(()=>active=null);return active;}
+async function openGate(change){
+ const status=await api('adminAuthStatus');if(status.unlocked&&!change)return;
+ const setup=!status.configured||change,dialog=el('dialog',{class:'access-dialog','aria-labelledby':'access-title'}),form=el('form',{autocomplete:'off'}),title=el('h2',{id:'access-title',text:setup?'Ваш пароль адмінпанелі':'Вхід до адмінпанелі'}),hint=el('p',{class:'hint',text:setup?'Задайте парольну фразу від 14 символів. Збережіть її у своєму менеджері паролів.':'Введіть пароль. Доступ також перевіряється за вашим акаунтом і роллю.'}),password=el('input',{type:'password',autocomplete:'off',minlength:'14',maxlength:'128',required:'true','aria-label':'Пароль',name:'royal-access'}),submit=el('button',{class:'button gold',text:setup?'Зберегти пароль':'Увійти'}),message=el('p',{class:'error',role:'status'});
+ if(setup&&status.role!=='owner')throw Error('Власник має спочатку задати пароль адмінпанелі.');
+ form.append(title,hint,el('label',{text:setup?'Нова парольна фраза':'Пароль'},[password]));let repeat;if(setup){repeat=el('input',{type:'password',autocomplete:'off',required:'true','aria-label':'Повторіть пароль'});form.append(el('label',{text:'Повторіть пароль'},[repeat]));}form.append(submit,message,el('p',{class:'hint',text:'Пароль не записується в localStorage або sessionStorage. Через годину сесія завершується.'}));dialog.append(form);document.body.append(dialog);dialog.addEventListener('cancel',e=>e.preventDefault());dialog.showModal();password.focus();
+ return new Promise(resolve=>{form.addEventListener('submit',async e=>{e.preventDefault();if(repeat&&repeat.value!==password.value){message.textContent='Паролі не збігаються.';return;}submit.disabled=true;let value=password.value;password.value='';if(repeat)repeat.value='';try{await api(setup?'adminSetPassword':'adminUnlock',{password:value});value='';dialog.close();dialog.remove();resolve();}catch(error){message.textContent=error.message;password.focus();}finally{value='';submit.disabled=false;}});});
+}
+export async function lockAdmin(){await api('adminLogout');location.reload();}
