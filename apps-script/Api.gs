@@ -62,7 +62,8 @@ function dailyMaintenance(){
  const lock=LockService.getScriptLock();lock.waitLock(25000);try{
  const source=DriveApp.getFileById(dbId_()),folderId=properties_().getProperty('BACKUP_FOLDER_ID');if(!folderId)throw Error('BACKUP_FOLDER_ID missing');const folder=DriveApp.getFolderById(folderId);source.makeCopy('Royal backup '+new Date().toISOString(),folder);
  const db=load_(),cfg=RoyalCore.settings(db),book=SpreadsheetApp.openById(dbId_());[['Analytics',cfg.analyticsRetentionDays],['Technical',cfg.technicalRetentionDays],['Requests',30]].forEach(([t,days])=>{const rows=db[t];for(let i=rows.length-1;i>=0;i--)if(Date.parse(rows[i].createdAt)<Date.now()-days*86400000)book.getSheetByName(t).deleteRow(i+2);});
- // Audit is retained; backups are private and require owner-managed retention.
+ const copies=folder.getFiles(),cutoff=Date.now()-cfg.backupRetentionDays*86400000;while(copies.hasNext()){const file=copies.next();if(file.getName().indexOf('Royal backup ')===0&&file.getDateCreated().getTime()<cutoff)file.setTrashed(true);}
+ // Business audit is retained. Backup deletion is recoverable through Drive Trash.
  }finally{lock.releaseLock();}
 }
 function installMaintenance(){if(!ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==='dailyMaintenance'))ScriptApp.newTrigger('dailyMaintenance').timeBased().everyDays(1).atHour(3).create();}
