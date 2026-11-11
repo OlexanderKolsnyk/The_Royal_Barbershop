@@ -1,7 +1,7 @@
-import {unlockAdmin,lockAdmin} from './admin-access.js?v=be98c6232635';
-import {renderCalendar,renderSchedules,editSchedule,editException} from './calendar-ui.js?v=be98c6232635';
-import {errorText} from './calendar-model.js?v=be98c6232635';
-import {api,money,dateTime,escape as esc,el,download} from './api.js?v=be98c6232635';
+import {unlockAdmin,lockAdmin} from './admin-access.js?v=eb7846e7dd09';
+import {renderCalendar,renderSchedules,editSchedule,editException} from './calendar-ui.js?v=eb7846e7dd09';
+import {errorText} from './calendar-model.js?v=eb7846e7dd09';
+import {api,money,dateTime,escape as esc,el,download} from './api.js?v=eb7846e7dd09';
 const $=s=>document.querySelector(s);let state,tab='calendar',view='week',day=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Kyiv',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),barberFilter='',search='',settingsTable='Services';
 const role=()=>state.actor.role,db=()=>state.data,status=s=>$('#admin-status').textContent=s;
 const names={Services:'Послуги',Barbers:'Майстри',Offers:'Ціни та тривалість',Schedules:'Графіки',Exceptions:'Відпустки й блокування',Settings:'Правила запису',Users:'Доступи',Versions:'Історія налаштувань'};
