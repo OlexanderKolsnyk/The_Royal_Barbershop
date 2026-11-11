@@ -1,5 +1,5 @@
-import {el,escape as esc,money} from './api.js?v=eb7846e7dd09';
-import {GRID_START,GRID_END,dayNames,dayIndex,dateKey,addDays,rangeDays,toTime,toMinute,minuteAt,toUtc,scheduleFor,workingRanges,eventLayout,localInput,inputToUtc,errorText} from './calendar-model.js?v=eb7846e7dd09';
+import {el,escape as esc,money} from './api.js?v=3ad49f72771c';
+import {GRID_START,GRID_END,dayNames,dayIndex,dateKey,addDays,rangeDays,toTime,toMinute,minuteAt,toUtc,scheduleFor,workingRanges,eventLayout,localInput,inputToUtc,errorText} from './calendar-model.js?v=3ad49f72771c';
 const shortDate=date=>new Intl.DateTimeFormat('uk-UA',{month:'short',day:'numeric'}).format(new Date(date+'T12:00:00Z'));
 function btn(text,callback,className='soft-button'){const b=el('button',{type:'button',class:className,text});b.addEventListener('click',callback);return b;}
 function select(label,choices,value,change){const s=el('select',{'aria-label':label});for(const [id,text]of choices)s.append(el('option',{value:id,text}));s.value=value;s.addEventListener('change',()=>change(s.value));return s;}
