@@ -25,8 +25,8 @@ export function createHandler(assets){return {async fetch(request,env){
    if(input.action==='bookingChange'&&!identity&&!input.token)return json({ok:false,error:{code:'UNAUTHORIZED',message:'Потрібен ключ запису'}},401,headers);
    if((input.action==='book'||input.action==='myBooking'||(input.action==='bookingChange'&&!identity))&&!/^[a-f0-9]{64}$/.test(input.token||''))throw Error('Invalid booking key');
    const requestId=request.headers.get('Idempotency-Key');if(mutations.includes(input.action)&&!/^[a-f0-9-]{36}$/.test(requestId||''))throw Error('Invalid idempotency key');
-   const cookie=/__Host-royal_admin=([a-f0-9]{64})(?:;|$)/.exec(request.headers.get('Cookie')||'');
-   const adminSessionHash=identity&&cookie?await sha(cookie[1]):null;
+   const sessionCookie=(request.headers.get('Cookie')||'').split(';').map(c=>c.trim()).find(c=>c.startsWith('__Host-royal_admin='))?.slice('__Host-royal_admin='.length);const cookie=/^[a-f0-9]{64}$/.test(sessionCookie||'')?sessionCookie:null;
+   const adminSessionHash=identity&&cookie?await sha(cookie):null;
    async function backend(action,params){const payload=serializeWire({action,params,identity:identity||null,adminSessionHash,tokenHash:input.token?await sha(input.token):null,requestId,requestHash:await sha(raw),timestamp:Date.now(),nonce:crypto.randomUUID(),rateKey:await sign(request.headers.get('CF-Connecting-IP')||'anonymous',env.GATEWAY_SECRET)});const upstream=await fetch(env.GAS_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({payload,signature:await sign(payload,env.GATEWAY_SECRET)}),signal:AbortSignal.timeout(30000)});const result=await upstream.json();if(typeof result.ok!=='boolean')throw Error('Invalid upstream response');return result;}
    let response;
    if(['adminUnlock','adminSetPassword'].includes(input.action)){
