@@ -37,5 +37,5 @@ export function createHandler(assets){return {async fetch(request,env){
  const path=url.pathname==='/'?'/index.html':url.pathname==='/admin'||url.pathname==='/admin/'?'/admin.html':url.pathname;
  const item=assets[path];if(!item)return new Response('Сторінку не знайдено',{status:404,headers});
  headers['Content-Type']=item.type;headers['Content-Security-Policy']="default-src 'self'; connect-src 'self' https://royal-barbershop-api.moltenheron4.chatgpt.site; img-src 'self' https: data:; style-src 'self'; script-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'";
- return new Response(item.content,{headers});
+ return new Response(item.encoding==='base64'?Uint8Array.from(atob(item.content),c=>c.charCodeAt(0)):item.content,{headers});
 }};}
