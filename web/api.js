@@ -5,7 +5,7 @@ export async function api(action,params={},options={}) {
  let result;try{result=await response.json();}catch{throw Error('Сервіс тимчасово недоступний. Спробуйте пізніше.');}
  if(!result.ok){const e=Error(result.error?.message||'Не вдалося виконати запит');e.code=result.error?.code;throw e;}return result.data;
 }
-export const money=n=>new Intl.NumberFormat('uk-UA',{style:'currency',currency:'UAH',maximumFractionDigits:0}).format(n/100);
+export const money=n=>new Intl.NumberFormat('uk-UA',{style:'currency',currency:'UAH',minimumFractionDigits:0,maximumFractionDigits:2}).format(n/100);
 export const dateTime=s=>new Intl.DateTimeFormat('uk-UA',{timeZone:'Europe/Kyiv',dateStyle:'medium',timeStyle:'short'}).format(new Date(s));
 export const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function el(tag,attrs={},children=[]){const e=document.createElement(tag);for(const [k,v]of Object.entries(attrs)){if(k==='text')e.textContent=v;else e.setAttribute(k,v);}for(const c of children)e.append(c);return e;}

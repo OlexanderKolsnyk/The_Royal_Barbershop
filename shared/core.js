@@ -132,7 +132,7 @@ var RoyalCore = (() => {
     authorize(actor,['owner','admin','barber']);const visible=clone(db);delete visible.Requests;
     visible.Bookings=visible.Bookings.filter(b=>actor.role!=='barber'||b.barberId===actor.barberId).map(publicBooking);
     if(actor.role==='barber'){for(const k of ['Users','Payments','Expenses','Versions','Audit','Analytics','Technical','Periods'])visible[k]=[];visible.Bookings=visible.Bookings.map(({phone,comment,...b})=>b);visible.Barbers=visible.Barbers.filter(b=>b.id===actor.barberId);visible.Notifications=[];}
-    else if(actor.role!=='owner')visible.Users=[];
+    else if(actor.role!=='owner'){visible.Users=[];visible.Versions=visible.Versions.filter(v=>v.table!=='Users');}
     visible.Settings=[settings(db)];return {actor,data:visible};
   }
   function finances(db,from,to){const inRange=x=>{const d=local(x.createdAt).date;return d>=from&&d<=to;};const pay=db.Payments.filter(inRange),expenses=db.Expenses.filter(inRange),sum=(xs,k)=>xs.reduce((n,x)=>n+(x[k]||0),0);return{actualMinor:sum(pay,'amountMinor'),tipsMinor:sum(pay,'tipMinor'),expensesMinor:sum(expenses,'amountMinor'),commissionMinor:sum(pay,'commissionMinor'),profitMinor:sum(pay,'amountMinor')-sum(expenses,'amountMinor')-sum(pay,'commissionMinor'),cashMinor:sum(pay.filter(x=>x.method==='cash'),'amountMinor'),cardMinor:sum(pay.filter(x=>x.method==='card'),'amountMinor'),plannedMinor:sum(db.Bookings.filter(x=>activeStatuses.includes(x.status)&&local(x.start).date>=from&&local(x.start).date<=to),'priceMinor')};}

@@ -1,18 +1,20 @@
 /* Only signed server-to-server POST requests are accepted. Never put GATEWAY_SECRET in source. */
 function properties_(){return PropertiesService.getScriptProperties();}
 function dbId_(){const id=properties_().getProperty('SPREADSHEET_ID');if(!id)throw Error('SPREADSHEET_ID missing');return id;}
-function rows_(name){const sheet=SpreadsheetApp.openById(dbId_()).getSheetByName(name);if(!sheet)throw Error('Missing table '+name);const n=sheet.getLastRow();return n<2?[]:sheet.getRange(2,1,n-1,4).getValues().filter(r=>r[0]).map(r=>JSON.parse(r[2]));}
-function load_(){const db={};RoyalCore.TABLES.forEach(t=>db[t]=rows_(t));return db;}
+function rows_(name,spreadsheetId){const sheet=SpreadsheetApp.openById(spreadsheetId||dbId_()).getSheetByName(name);if(!sheet)throw Error('Missing table '+name);const n=sheet.getLastRow();return n<2?[]:sheet.getRange(2,1,n-1,4).getValues().filter(r=>r[0]).map(r=>JSON.parse(r[2]));}
+function load_(spreadsheetId){const result=Sheets.Spreadsheets.Values.batchGet(spreadsheetId||dbId_(),{ranges:RoyalCore.TABLES.map(t=>t+'!A2:D'),valueRenderOption:'UNFORMATTED_VALUE'}),db={};RoyalCore.TABLES.forEach((t,i)=>db[t]=(result.valueRanges[i].values||[]).filter(r=>r[0]).map(r=>JSON.parse(r[2])));return db;}
 function hash_(s){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,s).map(b=>('0'+((b+256)%256).toString(16)).slice(-2)).join('');}
 function mac_(s){return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(s,properties_().getProperty('GATEWAY_SECRET'))).replace(/=+$/,'');}
 function equal_(a,b){if(typeof a!=='string'||typeof b!=='string'||a.length!==b.length)return false;let n=0;for(let i=0;i<a.length;i++)n|=a.charCodeAt(i)^b.charCodeAt(i);return n===0;}
 function json_(v){return ContentService.createTextOutput(JSON.stringify(v)).setMimeType(ContentService.MimeType.JSON);}
 function actor_(identity,db){if(!identity)return null;const u=db.Users.find(x=>x.active!==false&&x.email.toLowerCase()===identity.toLowerCase());if(!u){const e=Error('Недостатньо прав');e.code='FORBIDDEN';throw e;}return u;}
-function commit_(changes){
- const book=SpreadsheetApp.openById(dbId_()),requests=[];
- changes.forEach(({table,record})=>{const s=book.getSheetByName(table),values=s.getLastRow()<2?[]:s.getRange(2,1,s.getLastRow()-1,1).getValues();const index=values.findIndex(r=>r[0]===record.id);if(table==='Audit'){const last=s.getLastRow();record.previousHash=last>1?JSON.parse(s.getRange(last,3).getValue()).signature||'genesis':'genesis';record.signature=mac_(JSON.stringify(record));}const cells=[record.id,record.version,JSON.stringify(record),record.updatedAt||record.createdAt||new Date().toISOString()].map(v=>({userEnteredValue:{stringValue:String(v)}}));
- if(index<0)requests.push({appendCells:{sheetId:s.getSheetId(),rows:[{values:cells}],fields:'userEnteredValue'}});else requests.push({updateCells:{start:{sheetId:s.getSheetId(),rowIndex:index+1,columnIndex:0},rows:[{values:cells}],fields:'userEnteredValue'}});});
- if(requests.length)Sheets.Spreadsheets.batchUpdate({requests},dbId_());
+function commit_(changes,spreadsheetId){
+ if(!changes.length)return;const target=spreadsheetId||dbId_(),requests=[],tables=Array.from(new Set(changes.map(c=>c.table)));
+ const metadata=Sheets.Spreadsheets.get(target,{fields:'sheets(properties(sheetId,title))'}),ids={};metadata.sheets.forEach(s=>ids[s.properties.title]=s.properties.sheetId);
+ const ranges=Sheets.Spreadsheets.Values.batchGet(target,{ranges:tables.map(t=>t+'!A2:C'),valueRenderOption:'UNFORMATTED_VALUE'}),existing={};tables.forEach((t,i)=>existing[t]=(ranges.valueRanges[i].values||[]));
+ changes.forEach(({table,record})=>{const values=existing[table],index=values.findIndex(r=>r[0]===record.id);if(table==='Audit'){record.previousHash=values.length?JSON.parse(values[values.length-1][2]).signature||'genesis':'genesis';record.signature=mac_(JSON.stringify(record));}const row=[record.id,record.version,JSON.stringify(record),record.updatedAt||record.createdAt||new Date().toISOString()],cells=row.map(v=>({userEnteredValue:{stringValue:String(v)}}));
+ if(index<0){requests.push({appendCells:{sheetId:ids[table],rows:[{values:cells}],fields:'userEnteredValue'}});values.push(row);}else {requests.push({updateCells:{start:{sheetId:ids[table],rowIndex:index+1,columnIndex:0},rows:[{values:cells}],fields:'userEnteredValue'}});values[index]=row;}});
+ if(requests.length)Sheets.Spreadsheets.batchUpdate({requests},target);
 }
 function doGet(){return json_({ok:false,error:{code:'METHOD',message:'POST required'}});}
 function doPost(e){
