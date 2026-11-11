@@ -126,7 +126,9 @@ var RoyalCore = (() => {
     } else if(action==='readNotifications') {authorize(actor,['owner','admin']);db.Notifications.filter(x=>!x.read).forEach(x=>write('Notifications',{...x,read:true,version:x.version+1}));
     } else fail('NOT_FOUND','Невідома операція');
     if(changes.length){const safe=x=>x?Object.fromEntries(Object.entries(x).filter(([k])=>!['tokenHash','name','phone','comment','email','snapshot','priceConsentNote'].includes(k))):null;
-      write('Audit',{id:ctx.id(),version:1,action,actorId:actor?.email||'client',objectId:changes[0].record.id,before:safe(db[changes[0].table]?.find(x=>x.id===changes[0].record.id)),after:safe(changes[0].record),result:'success',createdAt:at});}
+      const business=changes.find(c=>!['Versions','Notifications'].includes(c.table))||changes[0];
+      const before=action==='saveEntity'&&p.record?.id?db[p.table].find(x=>x.id===p.record.id):db[business.table]?.find(x=>x.id===business.record.id);
+      write('Audit',{id:ctx.id(),version:1,action,actorId:actor?.email||'client',objectId:business.record.id,before:safe(before),after:safe(business.record),result:'success',createdAt:at});}
     return {changes,response};
   }
   function publicBooking(b){const {tokenHash,...v}=b;return v;}
