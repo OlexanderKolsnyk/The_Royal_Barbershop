@@ -4,6 +4,8 @@ const sha=async s=>hex(await crypto.subtle.digest('SHA-256',enc.encode(s)));
 const sign=async(s,key)=>{const k=await crypto.subtle.importKey('raw',enc.encode(key),{name:'HMAC',hash:'SHA-256'},false,['sign']);return btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC',k,enc.encode(s))))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');};
 const publicActions=['catalogue','slots','book','myBooking','bookingChange','analytics'];
 const mutations=['book','bookingChange','saveEntity','payment','expense','closePeriod','reprice','readNotifications'];
+// Keep the signed wire text ASCII; Google may otherwise reinterpret non-ASCII POST bytes.
+export const serializeWire=value=>JSON.stringify(value).replace(/[\u007f-\uffff]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
 const json=(data,status,headers)=>new Response(JSON.stringify(data),{status,headers:{...headers,'Content-Type':'application/json; charset=utf-8'}});
 export function createHandler(assets){return {async fetch(request,env){
  const url=new URL(request.url),origin=request.headers.get('Origin'),sameOrigin=origin===url.origin;
@@ -23,8 +25,8 @@ export function createHandler(assets){return {async fetch(request,env){
    if(input.action==='bookingChange'&&!identity&&!input.token)return json({ok:false,error:{code:'UNAUTHORIZED',message:'Потрібен ключ запису'}},401,headers);
    if((input.action==='book'||input.action==='myBooking'||(input.action==='bookingChange'&&!identity))&&!/^[a-f0-9]{64}$/.test(input.token||''))throw Error('Invalid booking key');
    const requestId=request.headers.get('Idempotency-Key');if(mutations.includes(input.action)&&!/^[a-f0-9-]{36}$/.test(requestId||''))throw Error('Invalid idempotency key');
-   const payload=JSON.stringify({action:input.action,params:input.params,identity:identity||null,tokenHash:input.token?await sha(input.token):null,requestId,requestHash:await sha(raw),timestamp:Date.now(),nonce:crypto.randomUUID(),rateKey:await sign(request.headers.get('CF-Connecting-IP')||'anonymous',env.GATEWAY_SECRET)});
-   const upstream=await fetch(env.GAS_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({payload,signature:await sign(payload,env.GATEWAY_SECRET)}),signal:AbortSignal.timeout(30000)});
+   const payload=serializeWire({action:input.action,params:input.params,identity:identity||null,tokenHash:input.token?await sha(input.token):null,requestId,requestHash:await sha(raw),timestamp:Date.now(),nonce:crypto.randomUUID(),rateKey:await sign(request.headers.get('CF-Connecting-IP')||'anonymous',env.GATEWAY_SECRET)});
+   const upstream=await fetch(env.GAS_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({payload,signature:await sign(payload,env.GATEWAY_SECRET)}),signal:AbortSignal.timeout(30000)});
    const response=await upstream.json();if(typeof response.ok!=='boolean')throw Error('Invalid upstream response');
    return json(response,response.ok?200:response.error?.code==='FORBIDDEN'?403:response.error?.code==='RATE_LIMIT'?429:409,headers);
   }catch(error){return json({ok:false,error:{code:'UNAVAILABLE',message:'Не вдалося отримати підтвердження. Повторіть запит: система перевірить, чи його вже виконано.'}},502,headers);}

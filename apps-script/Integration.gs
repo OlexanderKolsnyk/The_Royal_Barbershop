@@ -11,8 +11,9 @@ function runIntegrationTest(){
   for(let i=1;i<=7&&!slot;i++){const date=RoyalCore.local(new Date(now+i*86400000).toISOString()).date;slot=RoyalCore.slots(db,{serviceId:service.id,date},now).find(s=>!s.late);}
   check(slot,'available slot');
   const ctx={now,id:()=>Utilities.getUuid(),tokenHash:hash_('isolated-test-token')},params={name:'ISOLATED TEST',phone:'+380000000000',comment:'Disposable test copy only',serviceId:service.id,barberId:slot.barberId,start:slot.start,offerId:slot.offerId,offerVersion:slot.offerVersion};
-  let result=RoyalCore.prepare(db,'book',params,null,ctx);commit_(result.changes,testId);db=load_(testId);
-  check(db.Bookings.length===1&&db.Notifications.length===1&&db.Audit.length===1,'atomic booking bundle');
+  let result=RoyalCore.prepare(db,'saveEntity',{table:'Settings',record:RoyalCore.settings(db),expectedVersion:db.Settings[0].version},actor,ctx);commit_(result.changes,testId);db=load_(testId);check(db.Settings[0].version===cfg.version+1,'settings roundtrip');
+  result=RoyalCore.prepare(db,'book',params,null,ctx);commit_(result.changes,testId);db=load_(testId);
+  check(db.Bookings.length===1&&db.Notifications.length===1&&db.Audit.length===2,'atomic booking bundle');
   let duplicate=false;try{RoyalCore.prepare(db,'book',params,null,ctx);}catch(e){duplicate=true;}check(duplicate,'double booking rejection');
   const booking=db.Bookings[0],price=booking.priceMinor;
   const futureOffer={...db.Offers.find(x=>x.id===slot.offerId),id:Utilities.getUuid(),version:2,priceMinor:price+5000,effectiveFrom:new Date(now+1000).toISOString()};commit_([{table:'Offers',record:futureOffer}],testId);db=load_(testId);check(db.Bookings[0].priceMinor===price,'historical agreed price');

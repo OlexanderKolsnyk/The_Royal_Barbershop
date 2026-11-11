@@ -4,7 +4,7 @@ function dbId_(){const id=properties_().getProperty('SPREADSHEET_ID');if(!id)thr
 function rows_(name,spreadsheetId){const sheet=SpreadsheetApp.openById(spreadsheetId||dbId_()).getSheetByName(name);if(!sheet)throw Error('Missing table '+name);const n=sheet.getLastRow();return n<2?[]:sheet.getRange(2,1,n-1,4).getValues().filter(r=>r[0]).map(r=>JSON.parse(r[2]));}
 function load_(spreadsheetId){const result=Sheets.Spreadsheets.Values.batchGet(spreadsheetId||dbId_(),{ranges:RoyalCore.TABLES.map(t=>t+'!A2:D'),valueRenderOption:'UNFORMATTED_VALUE'}),db={};RoyalCore.TABLES.forEach((t,i)=>db[t]=(result.valueRanges[i].values||[]).filter(r=>r[0]).map(r=>JSON.parse(r[2])));return db;}
 function hash_(s){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,s).map(b=>('0'+((b+256)%256).toString(16)).slice(-2)).join('');}
-function mac_(s){return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(s,properties_().getProperty('GATEWAY_SECRET'))).replace(/=+$/,'');}
+function mac_(s){return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(s,properties_().getProperty('GATEWAY_SECRET'),Utilities.Charset.UTF_8)).replace(/=+$/,'');}
 function equal_(a,b){if(typeof a!=='string'||typeof b!=='string'||a.length!==b.length)return false;let n=0;for(let i=0;i<a.length;i++)n|=a.charCodeAt(i)^b.charCodeAt(i);return n===0;}
 function json_(v){return ContentService.createTextOutput(JSON.stringify(v)).setMimeType(ContentService.MimeType.JSON);}
 function actor_(identity,db){if(!identity)return null;const u=db.Users.find(x=>x.active!==false&&x.email.toLowerCase()===identity.toLowerCase());if(!u){const e=Error('Недостатньо прав');e.code='FORBIDDEN';throw e;}return u;}
