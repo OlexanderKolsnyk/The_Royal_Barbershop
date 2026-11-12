@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
+const source=fs.readFileSync(new URL('../web/start-at-top.js',import.meta.url),'utf8');
+function page(hash){const events={},scrolls=[],location={hash,pathname:'/shop/',search:''},history={scrollRestoration:'auto',replaceState:(_a,_b,url)=>{location.hash='';location.url=url;}},scope={location,history,document:{documentElement:{style:{scrollBehavior:'smooth'}}},window:{scrollTo:(x,y)=>scrolls.push([x,y])},addEventListener:(n,f)=>events[n]=f,requestAnimationFrame:f=>f()};vm.runInNewContext(source,scope);return{events,scrolls,location,history};}
+test('entry strips section hash and disables restored positions',()=>{const p=page('#royal');assert.equal(p.location.hash,'');assert.equal(p.history.scrollRestoration,'manual');p.events.pageshow();assert.equal(p.scrolls.length,4);assert.ok(p.scrolls.every(([x,y])=>x===0&&y===0));});
+test('private booking recovery link is retained',()=>{const p=page('#booking=private-key');assert.equal(p.location.hash,'#booking=private-key');});
+test('late load does not move visitor after deliberate interaction',()=>{const p=page('');p.events.pointerdown();const before=p.scrolls.length;p.events.load();assert.equal(p.scrolls.length,before);p.events.pageshow();assert.ok(p.scrolls.length>before);});

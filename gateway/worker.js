@@ -2,7 +2,7 @@ const enc=new TextEncoder();
 const hex=b=>Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,'0')).join('');
 const sha=async s=>hex(await crypto.subtle.digest('SHA-256',enc.encode(s)));
 const sign=async(s,key)=>{const k=await crypto.subtle.importKey('raw',enc.encode(key),{name:'HMAC',hash:'SHA-256'},false,['sign']);return btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC',k,enc.encode(s))))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');};
-const publicActions=['catalogue','slots','book','myBooking','bookingChange','analytics'];
+const publicActions=['catalogue','slots','book','myBooking','bookingChange','analytics','adminAuthStatus','adminUnlock','adminLogout'];
 const mutations=['book','bookingChange','saveEntity','payment','expense','closePeriod','reprice','readNotifications'];
 // Keep the signed wire text ASCII; Google may otherwise reinterpret non-ASCII POST bytes.
 export const serializeWire=value=>JSON.stringify(value).replace(/[\u007f-\uffff]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
@@ -21,12 +21,13 @@ export function createHandler(assets){return {async fetch(request,env){
    const raw=await request.text();if(raw.length>60000)return json({ok:false,error:{message:'Запит завеликий'}},413,headers);
    const input=JSON.parse(raw);if(typeof input.action!=='string'||!input.params||typeof input.params!=='object')throw Error('Invalid request');
    const identity=sameOrigin?request.headers.get('oai-authenticated-user-email'):null;
-   if(!publicActions.includes(input.action)&&!identity)return json({ok:false,error:{code:'UNAUTHORIZED',message:'Увійдіть у систему'}},401,headers);
-   if(input.action==='bookingChange'&&!identity&&!input.token)return json({ok:false,error:{code:'UNAUTHORIZED',message:'Потрібен ключ запису'}},401,headers);
-   if((input.action==='book'||input.action==='myBooking'||(input.action==='bookingChange'&&!identity))&&!/^[a-f0-9]{64}$/.test(input.token||''))throw Error('Invalid booking key');
+   const sessionCookie=(request.headers.get('Cookie')||'').split(';').map(c=>c.trim()).find(c=>c.startsWith('__Host-royal_admin='))?.slice('__Host-royal_admin='.length);const cookie=sameOrigin&&/^[a-f0-9]{64}$/.test(sessionCookie||'')?sessionCookie:null;
+   if(input.action.startsWith('admin')&&!sameOrigin)return json({ok:false,error:{code:'FORBIDDEN',message:'Відкрийте адмінпанель для входу.'}},403,headers);
+   if(!publicActions.includes(input.action)&&!cookie&&!(input.action==='adminSetPassword'&&identity))return json({ok:false,error:{code:'ADMIN_LOCKED',message:'Введіть пароль для доступу до адмінпанелі.'}},401,headers);
+   if(input.action==='bookingChange'&&!cookie&&!input.token)return json({ok:false,error:{code:'UNAUTHORIZED',message:'Потрібен ключ запису'}},401,headers);
+   if((input.action==='book'||input.action==='myBooking'||(input.action==='bookingChange'&&!cookie))&&!/^[a-f0-9]{64}$/.test(input.token||''))throw Error('Invalid booking key');
    const requestId=request.headers.get('Idempotency-Key');if(mutations.includes(input.action)&&!/^[a-f0-9-]{36}$/.test(requestId||''))throw Error('Invalid idempotency key');
-   const sessionCookie=(request.headers.get('Cookie')||'').split(';').map(c=>c.trim()).find(c=>c.startsWith('__Host-royal_admin='))?.slice('__Host-royal_admin='.length);const cookie=/^[a-f0-9]{64}$/.test(sessionCookie||'')?sessionCookie:null;
-   const adminSessionHash=identity&&cookie?await sha(cookie):null;
+   const adminSessionHash=cookie?await sha(cookie):null;
    async function backend(action,params){const payload=serializeWire({action,params,identity:identity||null,adminSessionHash,tokenHash:input.token?await sha(input.token):null,requestId,requestHash:await sha(raw),timestamp:Date.now(),nonce:crypto.randomUUID(),rateKey:await sign(request.headers.get('CF-Connecting-IP')||'anonymous',env.GATEWAY_SECRET)});const upstream=await fetch(env.GAS_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({payload,signature:await sign(payload,env.GATEWAY_SECRET)}),signal:AbortSignal.timeout(30000)});const result=await upstream.json();if(typeof result.ok!=='boolean')throw Error('Invalid upstream response');return result;}
    let response;
    if(['adminUnlock','adminSetPassword'].includes(input.action)){
@@ -42,9 +43,6 @@ export function createHandler(assets){return {async fetch(request,env){
    if(input.action==='adminLogout'&&response.ok)headers['Set-Cookie']='__Host-royal_admin=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0';
    return json(response,response.ok?200:response.error?.code==='FORBIDDEN'?403:response.error?.code==='RATE_LIMIT'?429:409,headers);
   }catch(error){return json({ok:false,error:{code:'UNAVAILABLE',message:'Не вдалося отримати підтвердження. Повторіть запит: система перевірить, чи його вже виконано.'}},502,headers);}
- }
- if(url.pathname==='/admin'||url.pathname==='/admin/'){
-  if(!request.headers.get('oai-authenticated-user-email'))return Response.redirect(url.origin+'/signin-with-chatgpt?return_to=%2Fadmin',302);
  }
  const path=url.pathname==='/'?'/index.html':url.pathname==='/admin'||url.pathname==='/admin/'?'/admin.html':url.pathname;
  const item=assets[path];if(!item)return new Response('Сторінку не знайдено',{status:404,headers});

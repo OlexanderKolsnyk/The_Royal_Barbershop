@@ -29,9 +29,10 @@ function doPost(e){
   if(!req.rateKey)throw Error('Missing rate key');
   const rateKey='rate:'+req.rateKey+':'+Math.floor(Date.now()/60000),attempts=Number(nonceCache.get(rateKey)||0),limit=req.action==='analytics'?12:req.action==='book'?10:120;
   if(attempts>=limit)return json_({ok:false,error:{code:'RATE_LIMIT',message:'Забагато запитів. Зачекайте хвилину.'}});nonceCache.put(rateKey,String(attempts+1),120);
-  const db=load_(), actor=actor_(req.identity,db),p=req.params||{},now=Date.now();
-  if(['adminAuthStatus','adminUnlock','adminSetPassword','adminLogout'].indexOf(req.action)>=0)return json_({ok:true,data:adminAuth_(req,actor)});
-  if(actor&&['catalogue','slots','myBooking','analytics'].indexOf(req.action)<0)requireAdminSession_(req,actor);
+  const db=load_(), actor=passwordActor_(req,db),nativeActor=req.identity?db.Users.find(u=>u.active!==false&&u.email.toLowerCase()===req.identity.toLowerCase()):null,p=req.params||{},now=Date.now();
+  if(['adminAuthStatus','adminUnlock','adminSetPassword','adminLogout'].indexOf(req.action)>=0)return json_({ok:true,data:adminAuth_(req,actor||nativeActor,db)});
+  if(['catalogue','slots','myBooking','analytics','book','bookingChange'].indexOf(req.action)<0)requireAdminSession_(req,actor);
+  if(actor&&['book','bookingChange'].indexOf(req.action)>=0)requireAdminSession_(req,actor);
   if(req.action==='catalogue')return json_({ok:true,data:RoyalCore.catalogue(db,now)});
   if(req.action==='slots')return json_({ok:true,data:RoyalCore.slots(db,p,now)});
   if(req.action==='myBooking'){const b=db.Bookings.find(b=>b.id===p.id&&b.tokenHash===req.tokenHash);if(!b)return json_({ok:false,error:{code:'NOT_FOUND',message:'Запис не знайдено. Перевірте ключ.'}});return json_({ok:true,data:RoyalCore.publicBooking(b)});}
