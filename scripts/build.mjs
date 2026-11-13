@@ -15,3 +15,7 @@ const worker=await fs.readFile('gateway/worker.js','utf8');await fs.writeFile('d
 await fs.copyFile('.openai/hosting.json','dist/.openai/hosting.json');await fs.copyFile('shared/core.js','apps-script/Core.gs');
 await fs.writeFile('apps-script/Initial.gs','var ROYAL_INITIAL = '+JSON.stringify(initial)+';\n');
 console.log('Built Worker, static assets and Apps Script sources.');
+
+await fs.mkdir('generated',{recursive:true});
+const gasFiles=['Core.gs','Initial.gs','Api.gs','AdminAuth.gs','Integration.gs','BrandRefresh.gs'];
+await fs.writeFile('generated/AppsScript.gs',(await Promise.all(gasFiles.map(f=>fs.readFile('apps-script/'+f,'utf8')))).join('\n'));

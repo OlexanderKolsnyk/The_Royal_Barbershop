@@ -2,7 +2,14 @@
 function properties_(){return PropertiesService.getScriptProperties();}
 function dbId_(){const id=properties_().getProperty('SPREADSHEET_ID');if(!id)throw Error('SPREADSHEET_ID missing');return id;}
 function rows_(name,spreadsheetId){const sheet=SpreadsheetApp.openById(spreadsheetId||dbId_()).getSheetByName(name);if(!sheet)throw Error('Missing table '+name);const n=sheet.getLastRow();return n<2?[]:sheet.getRange(2,1,n-1,4).getValues().filter(r=>r[0]).map(r=>JSON.parse(r[2]));}
-function load_(spreadsheetId){const result=Sheets.Spreadsheets.Values.batchGet(spreadsheetId||dbId_(),{ranges:RoyalCore.TABLES.map(t=>t+'!A2:D'),valueRenderOption:'UNFORMATTED_VALUE'}),db={};RoyalCore.TABLES.forEach((t,i)=>db[t]=(result.valueRanges[i].values||[]).filter(r=>r[0]).map(r=>JSON.parse(r[2])));return db;}
+// Read-only routes avoid unrelated history. Mutations keep a full fresh snapshot.
+function readTables_(action){return {catalogue:['Settings','Services','Barbers','Offers'],slots:['Settings','Services','Barbers','Offers','Schedules','Exceptions','Bookings'],myBooking:['Bookings'],analytics:[],adminAuthStatus:['Users'],adminUnlock:['Users'],adminSetPassword:['Users'],adminLogout:['Users']}[action];}
+function load_(spreadsheetId,tables){
+ const selected=tables===undefined?RoyalCore.TABLES:tables,db={};RoyalCore.TABLES.forEach(t=>db[t]=[]);
+ if(!selected.length)return db;
+ const result=Sheets.Spreadsheets.Values.batchGet(spreadsheetId||dbId_(),{ranges:selected.map(t=>t+'!A2:D'),valueRenderOption:'UNFORMATTED_VALUE'});
+ selected.forEach((t,i)=>db[t]=(result.valueRanges[i].values||[]).filter(r=>r[0]).map(r=>JSON.parse(r[2])));return db;
+}
 function hash_(s){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,s).map(b=>('0'+((b+256)%256).toString(16)).slice(-2)).join('');}
 function mac_(s){return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(s,properties_().getProperty('GATEWAY_SECRET'),Utilities.Charset.UTF_8)).replace(/=+$/,'');}
 function equal_(a,b){if(typeof a!=='string'||typeof b!=='string'||a.length!==b.length)return false;let n=0;for(let i=0;i<a.length;i++)n|=a.charCodeAt(i)^b.charCodeAt(i);return n===0;}
@@ -29,7 +36,7 @@ function doPost(e){
   if(!req.rateKey)throw Error('Missing rate key');
   const rateKey='rate:'+req.rateKey+':'+Math.floor(Date.now()/60000),attempts=Number(nonceCache.get(rateKey)||0),limit=req.action==='analytics'?12:req.action==='book'?10:120;
   if(attempts>=limit)return json_({ok:false,error:{code:'RATE_LIMIT',message:'Забагато запитів. Зачекайте хвилину.'}});nonceCache.put(rateKey,String(attempts+1),120);
-  const db=load_(), actor=passwordActor_(req,db),nativeActor=req.identity?db.Users.find(u=>u.active!==false&&u.email.toLowerCase()===req.identity.toLowerCase()):null,p=req.params||{},now=Date.now();
+  const db=load_(null,readTables_(req.action)), actor=passwordActor_(req,db),nativeActor=req.identity?db.Users.find(u=>u.active!==false&&u.email.toLowerCase()===req.identity.toLowerCase()):null,p=req.params||{},now=Date.now();
   if(['adminAuthStatus','adminUnlock','adminSetPassword','adminLogout'].indexOf(req.action)>=0)return json_({ok:true,data:adminAuth_(req,actor||nativeActor,db)});
   if(['catalogue','slots','myBooking','analytics','book','bookingChange'].indexOf(req.action)<0)requireAdminSession_(req,actor);
   if(actor&&['book','bookingChange'].indexOf(req.action)>=0)requireAdminSession_(req,actor);

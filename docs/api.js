@@ -1,4 +1,4 @@
-import {API} from './config.js?v=41d00086e2b5';
+import {API} from './config.js?v=1abe2cc5882d';
 export const endpoint=location.pathname.startsWith('/admin')?'/api':API;
 export async function api(action,params={},options={}) {
  const response=await fetch(endpoint,{method:'POST',mode:'cors',credentials:location.pathname.startsWith('/admin')?'same-origin':'omit',headers:{'Content-Type':'application/json','Idempotency-Key':options.key||crypto.randomUUID()},body:JSON.stringify({action,params,...(options.token?{token:options.token}:{})}),signal:AbortSignal.timeout(35000)});

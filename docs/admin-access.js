@@ -1,4 +1,4 @@
-import {api,el} from './api.js?v=41d00086e2b5';
+import {api,el} from './api.js?v=1abe2cc5882d';
 let active=null;
 export async function unlockAdmin({change=false}={}){if(active)return active;active=openGate(change).finally(()=>active=null);return active;}
 async function openGate(change){
